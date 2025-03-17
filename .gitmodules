@@ -1,0 +1,6 @@
+[submodule "builder-playground"]
+	path = builder-playground
+	url = https://github.com/flashbots/builder-playground.git
+[submodule "builder-hub"]
+	path = builder-hub
+	url = https://github.com/flashbots/builder-hub.git
