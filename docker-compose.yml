@@ -1,0 +1,22 @@
+version: '3.8'
+services:
+  db:
+    image: postgres:15
+    environment:
+      - POSTGRES_USER=builderhub
+      - POSTGRES_PASSWORD=builderhub
+      - POSTGRES_DB=builderhub
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  builderhub:
+    build: ./builder-hub
+    depends_on:
+      - db
+    environment:
+      - POSTGRES_DSN=postgres://builderhub:builderhub@db:5432/builderhub?sslmode=disable
+    ports:
+      - "8080:8080"
+
+volumes:
+  pgdata:
