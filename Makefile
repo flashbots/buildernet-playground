@@ -38,7 +38,7 @@ start-playground:
 # 6. Stop ephemeral containers from builder-playground
 #    (assuming builder-playground supports a "stop" command.)
 stop-playground:
-#	 cd $(PLAYGROUND_SUBMODULE_DIR) && go run main.go stop || true
+#	cd $(PLAYGROUND_SUBMODULE_DIR) && go run main.go stop || true
 
 # 7. Create a QEMU disk image of size 2T
 # TODO: replace with the correct qemu-img command to create a disk image of the desired size
@@ -77,9 +77,9 @@ all: setup-submodules up start-playground
 stop-all: down stop-playground stop-qemu
 	@echo "All containers down and qemu is stopped."
 
-# 13. Dist-clean: fully remove volumes, images, ephemeral, etc.
+# 13. Stops all and fully remove volumes, images, ephemeral, etc.
 #     This is the "start-from-scratch" environment.
-dist-clean: stop-all
+clean: stop-all
 	@echo "Performing distribution-level cleanup..."
 	docker compose -f $(COMPOSE_FILE) down --volumes --rmi local
 	@echo "Volumes, local images for builder-hub, and containers removed."
