@@ -1,87 +1,164 @@
-# File: Makefile
+# Configuration variables
+BZIMAGE_PATH := $(PWD)/bzImage
+ORIGINAL_CPIO := $(PWD)/cvm-initramfs-tdx.cpio.gz
+DEBUG_SCRIPT := $(PWD)/debug-yolo
+WORKDIR := $(PWD)/build
+EXTRACT_DONE := $(WORKDIR)/.extract_done
+INJECT_DONE := $(WORKDIR)/.inject_done
+FIXED_CPIO := $(WORKDIR)/fixed-initramfs.cpio
+FIXED_CPIO_GZ := $(WORKDIR)/fixed-initramfs.cpio.gz
+QCOW2_IMAGE := $(PWD)/persistent.qcow2
+QCOW2_SIZE := 2T
 
-# The Docker Compose file that starts builder-hub + DB
-COMPOSE_FILE = docker-compose.yml
+# SSH & port configuration
+QEMU_MEM := 4G
+QEMU_SMP := 4
 
-# Submodules
-HUB_SUBMODULE_DIR = builder-hub
-PLAYGROUND_SUBMODULE_DIR = builder-playground
+# SSH key for development (comment out if you don't want to inject a key)
+# Will use ~/.ssh/id_rsa.pub as default if it exists
+SSH_KEY_PATH := $(shell if [ -f ~/.ssh/id_rsa.pub ]; then echo ~/.ssh/id_rsa.pub; fi)
 
-# Name of the QCOW2 disk for QEMU
-QEMU_DISK = buildernet.qcow2
-# Desired size for the disk
-QEMU_DISK_SIZE = 2T
+# Default target
+all: inject
 
-# We'll store QEMU's PID in a file so we can stop it later
-QEMU_PID_FILE = .qemu.pid
+# Create working directory
+$(WORKDIR):
+	mkdir -p $(WORKDIR)
 
-# 1. SETUP: initialize or update submodules
-setup-submodules:
-	git submodule update --init --recursive
+# Extract initramfs (only if not already done or dependencies changed)
+$(EXTRACT_DONE): $(ORIGINAL_CPIO) | $(WORKDIR)
+	@echo "Extracting original initramfs..."
+	rm -rf $(WORKDIR)/extract
+	mkdir -p $(WORKDIR)/extract
+	cd $(WORKDIR)/extract && gunzip -c $(ORIGINAL_CPIO) | cpio -idmv > /dev/null 2>&1
+	touch $(EXTRACT_DONE)
 
-# 2. BUILD or pull images if needed
-build:
-	docker compose -f $(COMPOSE_FILE) build
+# Inject debug script (only if not already done or dependencies changed)
+$(INJECT_DONE): $(EXTRACT_DONE) $(DEBUG_SCRIPT)
+	@echo "Installing debug script..."
+	mkdir -p $(WORKDIR)/extract/etc/init.d
+	cp $(DEBUG_SCRIPT) $(WORKDIR)/extract/etc/init.d/debug-yolo
+	chmod +x $(WORKDIR)/extract/etc/init.d/debug-yolo
+	@echo "Creating runlevel symlinks..."
+	mkdir -p $(WORKDIR)/extract/etc/rc2.d $(WORKDIR)/extract/etc/rc3.d $(WORKDIR)/extract/etc/rc4.d $(WORKDIR)/extract/etc/rc5.d
+	cd $(WORKDIR)/extract && \
+		ln -sf ../init.d/debug-yolo etc/rc2.d/S50debug-yolo && \
+		ln -sf ../init.d/debug-yolo etc/rc3.d/S50debug-yolo && \
+		ln -sf ../init.d/debug-yolo etc/rc4.d/S50debug-yolo && \
+		ln -sf ../init.d/debug-yolo etc/rc5.d/S50debug-yolo
 
-# 3. Bring up builder-hub + DB
-up:
-	docker compose -f $(COMPOSE_FILE) up -d
+	@echo "Setting up SSH directories..."
+	mkdir -p $(WORKDIR)/extract/home/root/.ssh
+	# If an SSH key was specified, copy it
+	@if [ -n "$(SSH_KEY_PATH)" ] && [ -f "$(SSH_KEY_PATH)" ]; then \
+		echo "Injecting SSH key from $(SSH_KEY_PATH)..."; \
+		cp $(SSH_KEY_PATH) $(WORKDIR)/extract/home/root/.ssh/authorized_keys; \
+		chmod 700 $(WORKDIR)/extract/home/root/.ssh; \
+		chmod 600 $(WORKDIR)/extract/home/root/.ssh/authorized_keys; \
+	else \
+		echo "No SSH key specified or found, creating empty authorized_keys file."; \
+		touch $(WORKDIR)/extract//home/root/.ssh/authorized_keys; \
+		chmod 700 $(WORKDIR)/extract/home/root/.ssh; \
+		chmod 600 $(WORKDIR)/extract/home/root/.ssh/authorized_keys; \
+	fi
+	
+	touch $(INJECT_DONE)
 
-# 4. Tear down builder-hub + DB
-down:
-	docker compose -f $(COMPOSE_FILE) down
+# Create uncompressed cpio
+$(FIXED_CPIO): $(INJECT_DONE)
+	@echo "Creating new initramfs..."
+	cd $(WORKDIR)/extract && find . -print | sort | cpio -H newc -o > $(FIXED_CPIO) 2>/dev/null
 
-# 5. Start ephemeral L1 environment with builder-playground
-start-playground:
-	cd $(PLAYGROUND_SUBMODULE_DIR) && go run main.go --recipe l1
+# Create compressed cpio.gz
+$(FIXED_CPIO_GZ): $(FIXED_CPIO)
+	@echo "Compressing initramfs..."
+	cat $(FIXED_CPIO) | gzip -9 > $(FIXED_CPIO_GZ)
 
-# 6. Stop ephemeral containers from builder-playground
-#    (assuming builder-playground supports a "stop" command.)
-stop-playground:
-#	cd $(PLAYGROUND_SUBMODULE_DIR) && go run main.go stop || true
+# Create QEMU disk image if it doesn't exist
+$(QCOW2_IMAGE):
+	@echo "Creating QEMU disk image of size $(QCOW2_SIZE)..."
+	qemu-img create -f qcow2 $(QCOW2_IMAGE) $(QCOW2_SIZE)
 
-# 7. Create a QEMU disk image of size 2T
-# TODO: replace with the correct qemu-img command to create a disk image of the desired size
-create-disk:
-#	qemu-img create -f qcow2 $(QEMU_DISK) $(QEMU_DISK_SIZE)
+# Target aliases
+extract: $(EXTRACT_DONE)
+inject: $(INJECT_DONE) $(FIXED_CPIO) $(FIXED_CPIO_GZ)
+	@echo "Done! Modified initramfs is at $(FIXED_CPIO) and $(FIXED_CPIO_GZ)"
+	@if [ -n "$(SSH_KEY_PATH)" ] && [ -f "$(SSH_KEY_PATH)" ]; then \
+		echo "SSH key from $(SSH_KEY_PATH) injected."; \
+	else \
+		echo "WARNING: No SSH key injected. Password-less root login will be enabled."; \
+	fi
 
-# 8. Start QEMU with that disk (placeholder command – adapt as needed)
-# TODO: replace with correct qemu command with the correct network configuration and port mapping and disk image attached configuration
-start-qemu:
-#	@if [ -f $(QEMU_PID_FILE) ]; then echo "QEMU appears to be running ($(QEMU_PID_FILE) exists). Stop it first with 'make stop-qemu'."; exit 1; fi
-#	qemu-system-x86_64 \\
-#	  -m 4096 \\
-#	  -enable-kvm \\
-#	  -drive file=$(QEMU_DISK),if=virtio \\
-#	  -nic user,model=virtio-net-pci,hostfwd=tcp::10022-:22 \\
-#	  -daemonize \\
-#	  -pidfile $(QEMU_PID_FILE)
-#	@echo "QEMU started in background, PID stored in $(QEMU_PID_FILE)."
+disk: $(QCOW2_IMAGE)
 
-# 9. Stop QEMU by killing PID in .qemu.pid
-stop-qemu:
-#	 @if [ ! -f $(QEMU_PID_FILE) ]; then echo "No QEMU pid file found. Maybe QEMU isn't running?"; exit 0; fi
-#	 @pid=$$(cat $(QEMU_PID_FILE)) && echo "Stopping QEMU with PID $$pid..." && kill $$pid
-#	 @rm -f $(QEMU_PID_FILE)
+# Run QEMU with injected initramfs
+run: $(FIXED_CPIO) $(QCOW2_IMAGE)
+	@echo "Starting QEMU with modified initramfs..."
+	@echo "==================================================================="
+	@echo "SSH ACCESS: Use 'ssh -p 10022 root@localhost' to connect (port 22)"
+	@echo "==================================================================="
+	qemu-system-x86_64 -accel kvm -m $(QEMU_MEM) -smp $(QEMU_SMP) \
+	  -name dev-test,process=dev-test \
+	  -kernel $(BZIMAGE_PATH) \
+	  -initrd $(FIXED_CPIO) \
+	  -cpu host -machine q35 \
+	  -append "console=ttyS0 earlyprintk=serial,ttyS0 debug loglevel=8 nokaslr" \
+	  -nographic \
+	  -netdev user,id=net0,hostfwd=tcp::10022-:22,hostfwd=tcp::10222-:2222 \
+	  -device e1000,netdev=net0 \
+	  -device virtio-scsi-pci,id=scsi0 \
+	  -drive file=$(QCOW2_IMAGE),if=none,id=persistent,format=qcow2 \
+	  -device scsi-hd,drive=persistent,bus=scsi0.0,lun=10
 
-# 10. Clean QEMU: ensures QEMU is stopped, optionally removes disk
-clean-qemu: stop-qemu
-#	@echo "Removing QEMU disk $(QEMU_DISK) (optional)..."
-#	rm -f $(QEMU_DISK)
+# Run QEMU with injected and gzipped initramfs
+run-gz: $(FIXED_CPIO_GZ) $(QCOW2_IMAGE)
+	@echo "Starting QEMU with modified gzipped initramfs..."
+	@echo "==================================================================="
+	@echo "SSH ACCESS: Use 'ssh -p 10022 root@localhost' to connect (port 22)"
+	@echo "==================================================================="
+	qemu-system-x86_64 -accel kvm -m $(QEMU_MEM) -smp $(QEMU_SMP) \
+	  -name dev-test,process=dev-test \
+	  -kernel $(BZIMAGE_PATH) \
+	  -initrd $(FIXED_CPIO_GZ) \
+	  -cpu host -machine q35 \
+	  -append "console=ttyS0 earlyprintk=serial,ttyS0 debug loglevel=8 nokaslr" \
+	  -nographic \
+	  -netdev user,id=net0,hostfwd=tcp::10022-:22 \
+	  -device e1000,netdev=net0 \
+	  -device virtio-scsi-pci,id=scsi0 \
+	  -drive file=$(QCOW2_IMAGE),if=none,id=persistent,format=qcow2 \
+	  -device scsi-hd,drive=persistent,bus=scsi0.0,lun=10
 
-# 11. Combined “all” target that sets up submodules, starts builder-hub, and playground
-all: setup-submodules up start-playground
-	@echo "All services are up. (QEMU optional)"
+# Run QEMU with direct console shell
+run-shell: $(FIXED_CPIO_GZ) $(QCOW2_IMAGE)
+	@echo "Starting QEMU with direct shell access..."
+	@echo "==================================================================="
+	@echo "You will get a direct shell. Run 'exec /sbin/init' to continue normal boot."
+	@echo "==================================================================="
+	qemu-system-x86_64 -accel kvm -m $(QEMU_MEM) -smp $(QEMU_SMP) \
+	  -name dev-test,process=dev-test \
+	  -kernel $(BZIMAGE_PATH) \
+	  -initrd $(FIXED_CPIO_GZ) \
+	  -cpu host -machine q35 \
+	  -append "console=ttyS0 earlyprintk=serial,ttyS0 debug loglevel=8 nokaslr rdinit=/bin/sh" \
+	  -nographic \
+	  -netdev user,id=net0,hostfwd=tcp::10022-:22 \
+	  -device e1000,netdev=net0 \
+	  -device virtio-scsi-pci,id=scsi0 \
+	  -drive file=$(QCOW2_IMAGE),if=none,id=persistent,format=qcow2 \
+	  -device scsi-hd,drive=persistent,bus=scsi0.0,lun=10
 
-# 12. Stop everything: remove containers, ephemeral L1, (optionally volumes)
-stop-all: down stop-playground stop-qemu
-	@echo "All containers down and qemu is stopped."
+# Force rebuild of initramfs
+rebuild:
+	rm -f $(EXTRACT_DONE) $(INJECT_DONE) $(FIXED_CPIO) $(FIXED_CPIO_GZ)
+	$(MAKE) inject
 
-# 13. Stops all and fully remove volumes, images, ephemeral, etc.
-#     This is the "start-from-scratch" environment.
-clean: stop-all
-	@echo "Performing distribution-level cleanup..."
-	docker compose -f $(COMPOSE_FILE) down --volumes --rmi local
-	@echo "Volumes, local images for builder-hub, and containers removed."
-	$(MAKE) clean-qemu
-	@echo "Dist-clean complete."
+# Clean up
+clean:
+	rm -rf $(WORKDIR)
+
+# Very clean (includes disk image)
+distclean: clean
+	rm -f $(QCOW2_IMAGE)
+
+.PHONY: all extract inject disk run run-gz rebuild clean distclean
