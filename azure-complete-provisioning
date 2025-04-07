@@ -1,0 +1,32 @@
+#!/bin/sh
+### BEGIN INIT INFO
+# Provides:          azure-complete-provisioning
+# Required-Start:    $remote_fs $syslog $network
+# Default-Start:     2 3 4 5
+# Short-Description: Report VM is ready to Azure API
+### END INIT INFO
+
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+NAME=azure-complete-provisioning
+DESC="Complete the provisioning of the Azure VM and report it is ready in the absence of the Azure VM Agent \
+      Adapted from https://learn.microsoft.com/en-us/azure/virtual-machines/linux/no-agent#bash-script"
+SYSTEM_API_FIFO=/var/volatile/system-api.fifo
+LOGFILE=/var/log/azure-complete-provisioning.log
+
+
+start() {
+  echo "This is a local dev mode for testing purposes only!"
+}
+
+case "$1" in
+  start)
+    start
+    ;;
+  *)
+    N=/etc/init.d/$NAME
+    echo "Usage: $N {start}" >&2
+    exit 1
+    ;;
+esac
+
+exit 0

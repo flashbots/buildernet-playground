@@ -17,83 +17,6 @@ log() {
     echo "DEBUG-YOLO: $1"
 }
 
-setup_environment() {
-    log "Setting up essential directories..."
-    # Create essential directories
-    mkdir -p /proc /sys /dev /run /tmp
-    
-    # Mount essential filesystems if not already mounted
-    mount -t proc proc /proc 2>/dev/null || log "Could not mount /proc"
-    mount -t sysfs sysfs /sys 2>/dev/null || log "Could not mount /sys"
-    mount -t devtmpfs devtmpfs /dev 2>/dev/null || log "Could not mount /dev"
-    
-    # Ensure null device exists
-    if [ ! -e /dev/null ]; then
-        mknod -m 666 /dev/null c 1 3 2>/dev/null || log "Could not create /dev/null"
-    fi
-}
-
-try_simple_network() {
-    log "Setting up simple network config..."
-    ifconfig lo up
-    ifconfig eth0 up
-    
-    # Set static IP (optional, comment out if not needed)
-    ifconfig eth0 10.0.2.15 netmask 255.255.255.0 2>/dev/null
-    route add default gw 10.0.2.2 2>/dev/null
-    
-    # Basic debugging output
-    log "Network interfaces:"
-    ifconfig -a
-}
-
-try_start_dropbear() {
-    log "Starting dropbear SSH server..."
-    
-    # Set a simple root password (using two methods for redundancy)
-    echo "root:root" > /tmp/passwd.tmp
-    chpasswd < /tmp/passwd.tmp
-    rm /tmp/passwd.tmp
-    log "Set root password to 'root'"
-    
-    # Override dropbear defaults to enable password auth and disable key restriction
-    mkdir -p /etc/default
-    rm /etc/default/dropbear
-    echo 'DROPBEAR_EXTRA_ARGS="-w -B"' > /etc/default/dropbear
-    chmod 644 /etc/default/dropbear
-    log "Modified Dropbear config to enable password auth"
-    
-    # Generate only rsa host key (minimum required)
-    log "Generating Dropbear host key..."
-    mkdir -p /etc/dropbear
-    dropbearkey -t rsa -f /etc/dropbear/dropbear_rsa_host_key 2>/dev/null || log "Failed to generate key"
-    chmod 600 /etc/dropbear/dropbear_rsa_host_key
-    
-    # Kill any existing dropbear instances
-    killall dropbear 2>/dev/null
-    
-    # Create PID directory
-    mkdir -p /var/run
-    
-    # Start dropbear with all options to allow all auth methods
-    log "Starting Dropbear SSH server..."
-    dropbear -R -E -w -B -p 22 &
-    
-    # Start another instance in foreground mode if first one fails
-    sleep 2
-    if ! ps | grep -v grep | grep -q dropbear; then
-        log "First dropbear failed, trying alternative start..."
-        dropbear -R -E -w -B -p 2222 &
-        log "Alternative SSH on port 2222 (access via 10222)"
-    fi
-    
-    # Wait a moment
-    sleep 2
-    
-    # Show running processes for debugging
-    log "Running processes:"
-    ps
-}
 
 create_auto_continue() {
     # Create a file that will automatically continue boot after timeout
@@ -108,23 +31,6 @@ create_auto_continue() {
 start() {
     log "Starting ultra-minimal debug script..."
     
-    # Reset the continue file
-    rm -f $CONTINUE_FILE
-    
-    # Setup basic environment
-    setup_environment
-    
-    # Try network setup
-    try_simple_network
-    
-    # Start SSH server
-    try_start_dropbear
-    
-    # Create a simple script to manually continue booting
-    echo '#!/bin/sh' > /bin/continue-boot
-    echo "touch $CONTINUE_FILE" >> /bin/continue-boot
-    chmod +x /bin/continue-boot
-    
     # Create the timeout handler
     create_auto_continue
     
@@ -132,8 +38,7 @@ start() {
     log "========================================================"
     log "BOOT PROCESS PAUSED FOR DEBUG ACCESS"
     log ""
-    log "SSH ACCESS: ssh -p 10022 root@localhost (password: root)"
-    log "Alternative: ssh -p 10222 root@localhost (port 2222 inside VM)"
+    log "SSH ACCESS: ssh -p 10022 root@localhost"
     log ""
     log "The system will continue booting when you create:"
     log "    $CONTINUE_FILE"

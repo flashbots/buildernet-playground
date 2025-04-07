@@ -2,6 +2,7 @@
 BZIMAGE_PATH := $(PWD)/bzImage
 ORIGINAL_CPIO := $(PWD)/cvm-initramfs-tdx.cpio.gz
 DEBUG_SCRIPT := $(PWD)/debug-yolo
+AZURE_SCRIPT := $(PWD)/azure-complete-provisioning
 WORKDIR := $(PWD)/build
 EXTRACT_DONE := $(WORKDIR)/.extract_done
 INJECT_DONE := $(WORKDIR)/.inject_done
@@ -30,36 +31,46 @@ $(EXTRACT_DONE): $(ORIGINAL_CPIO) | $(WORKDIR)
 	@echo "Extracting original initramfs..."
 	rm -rf $(WORKDIR)/extract
 	mkdir -p $(WORKDIR)/extract
-	cd $(WORKDIR)/extract && gunzip -c $(ORIGINAL_CPIO) | cpio -idmv > /dev/null 2>&1
+	cd $(WORKDIR)/extract && gunzip -c $(ORIGINAL_CPIO) | sudo cpio -idmv > /dev/null 2>&1
 	touch $(EXTRACT_DONE)
 
 # Inject debug script (only if not already done or dependencies changed)
-$(INJECT_DONE): $(EXTRACT_DONE) $(DEBUG_SCRIPT)
+$(INJECT_DONE): $(EXTRACT_DONE) $(DEBUG_SCRIPT) $(AZURE_SCRIPT)
 	@echo "Installing debug script..."
-	mkdir -p $(WORKDIR)/extract/etc/init.d
-	cp $(DEBUG_SCRIPT) $(WORKDIR)/extract/etc/init.d/debug-yolo
-	chmod +x $(WORKDIR)/extract/etc/init.d/debug-yolo
+	sudo cp $(DEBUG_SCRIPT) $(WORKDIR)/extract/etc/init.d/debug-yolo
+	sudo chmod +x $(WORKDIR)/extract/etc/init.d/debug-yolo
+	sudo chown root:root $(WORKDIR)/extract/etc/init.d/debug-yolo
 	@echo "Creating runlevel symlinks..."
-	mkdir -p $(WORKDIR)/extract/etc/rc2.d $(WORKDIR)/extract/etc/rc3.d $(WORKDIR)/extract/etc/rc4.d $(WORKDIR)/extract/etc/rc5.d
 	cd $(WORKDIR)/extract && \
-		ln -sf ../init.d/debug-yolo etc/rc2.d/S50debug-yolo && \
-		ln -sf ../init.d/debug-yolo etc/rc3.d/S50debug-yolo && \
-		ln -sf ../init.d/debug-yolo etc/rc4.d/S50debug-yolo && \
-		ln -sf ../init.d/debug-yolo etc/rc5.d/S50debug-yolo
+		sudo ln -sf ../init.d/debug-yolo etc/rc2.d/S50debug-yolo && \
+		sudo ln -sf ../init.d/debug-yolo etc/rc3.d/S50debug-yolo && \
+		sudo ln -sf ../init.d/debug-yolo etc/rc4.d/S50debug-yolo && \
+		sudo ln -sf ../init.d/debug-yolo etc/rc5.d/S50debug-yolo
+
+	@echo "Overwriting /etc/init.d/azure-complete-provisioning..."
+	sudo cp $(AZURE_SCRIPT) $(WORKDIR)/extract/etc/init.d/azure-complete-provisioning
+	sudo chmod +x $(WORKDIR)/extract/etc/init.d/azure-complete-provisioning
+	sudo chown root:root $(WORKDIR)/extract/etc/init.d/azure-complete-provisioning
 
 	@echo "Setting up SSH directories..."
-	mkdir -p $(WORKDIR)/extract/home/root/.ssh
-	# If an SSH key was specified, copy it
 	@if [ -n "$(SSH_KEY_PATH)" ] && [ -f "$(SSH_KEY_PATH)" ]; then \
 		echo "Injecting SSH key from $(SSH_KEY_PATH)..."; \
-		cp $(SSH_KEY_PATH) $(WORKDIR)/extract/home/root/.ssh/authorized_keys; \
-		chmod 700 $(WORKDIR)/extract/home/root/.ssh; \
-		chmod 600 $(WORKDIR)/extract/home/root/.ssh/authorized_keys; \
+		cat $(SSH_KEY_PATH) | sudo tee -a $(WORKDIR)/extract/home/root/.ssh/authorized_keys; \
+		sudo chmod 700 $(WORKDIR)/extract/home/root/.ssh; \
+		sudo chmod 600 $(WORKDIR)/extract/home/root/.ssh/authorized_keys; \
 	else \
 		echo "No SSH key specified or found, creating empty authorized_keys file."; \
-		touch $(WORKDIR)/extract//home/root/.ssh/authorized_keys; \
-		chmod 700 $(WORKDIR)/extract/home/root/.ssh; \
-		chmod 600 $(WORKDIR)/extract/home/root/.ssh/authorized_keys; \
+		sudo touch $(WORKDIR)/extract/home/root/.ssh/authorized_keys; \
+		sudo chmod 700 $(WORKDIR)/extract/home/root/.ssh; \
+		sudo chmod 600 $(WORKDIR)/extract/home/root/.ssh/authorized_keys; \
+	fi
+	
+	@echo "Fixing Dropbear init script links..."
+	@if [ -f "$(WORKDIR)/extract/etc/rcS.d/K10dropbear" ]; then \
+		sudo mv $(WORKDIR)/extract/etc/rcS.d/K10dropbear $(WORKDIR)/extract/etc/rcS.d/S10dropbear; \
+		echo "Dropbear init script link fixed."; \
+	else \
+		echo "Warning: Could not find rc directories to fix Dropbear links."; \
 	fi
 	
 	touch $(INJECT_DONE)
@@ -67,12 +78,12 @@ $(INJECT_DONE): $(EXTRACT_DONE) $(DEBUG_SCRIPT)
 # Create uncompressed cpio
 $(FIXED_CPIO): $(INJECT_DONE)
 	@echo "Creating new initramfs..."
-	cd $(WORKDIR)/extract && find . -print | sort | cpio -H newc -o > $(FIXED_CPIO) 2>/dev/null
+	cd $(WORKDIR)/extract && sudo find . -print | sort | sudo cpio -H newc -o > $(FIXED_CPIO) 2>/dev/null
 
 # Create compressed cpio.gz
 $(FIXED_CPIO_GZ): $(FIXED_CPIO)
 	@echo "Compressing initramfs..."
-	cat $(FIXED_CPIO) | gzip -9 > $(FIXED_CPIO_GZ)
+	cat $(FIXED_CPIO) | gzip -6 > $(FIXED_CPIO_GZ)
 
 # Create QEMU disk image if it doesn't exist
 $(QCOW2_IMAGE):
@@ -95,7 +106,7 @@ disk: $(QCOW2_IMAGE)
 run: $(FIXED_CPIO) $(QCOW2_IMAGE)
 	@echo "Starting QEMU with modified initramfs..."
 	@echo "==================================================================="
-	@echo "SSH ACCESS: Use 'ssh -p 10022 root@localhost' to connect (port 22)"
+	@echo "SSH ACCESS: Use 'ssh -p 10022 root@localhost' to connect (port 40192)"
 	@echo "==================================================================="
 	qemu-system-x86_64 -accel kvm -m $(QEMU_MEM) -smp $(QEMU_SMP) \
 	  -name dev-test,process=dev-test \
@@ -104,7 +115,7 @@ run: $(FIXED_CPIO) $(QCOW2_IMAGE)
 	  -cpu host -machine q35 \
 	  -append "console=ttyS0 earlyprintk=serial,ttyS0 debug loglevel=8 nokaslr" \
 	  -nographic \
-	  -netdev user,id=net0,hostfwd=tcp::10022-:22,hostfwd=tcp::10222-:2222 \
+	  -netdev user,id=net0,hostfwd=tcp::10022-:40192 \
 	  -device e1000,netdev=net0 \
 	  -device virtio-scsi-pci,id=scsi0 \
 	  -drive file=$(QCOW2_IMAGE),if=none,id=persistent,format=qcow2 \
@@ -114,7 +125,7 @@ run: $(FIXED_CPIO) $(QCOW2_IMAGE)
 run-gz: $(FIXED_CPIO_GZ) $(QCOW2_IMAGE)
 	@echo "Starting QEMU with modified gzipped initramfs..."
 	@echo "==================================================================="
-	@echo "SSH ACCESS: Use 'ssh -p 10022 root@localhost' to connect (port 22)"
+	@echo "SSH ACCESS: Use 'ssh -p 10022 root@localhost' to connect (port 40192)"
 	@echo "==================================================================="
 	qemu-system-x86_64 -accel kvm -m $(QEMU_MEM) -smp $(QEMU_SMP) \
 	  -name dev-test,process=dev-test \
@@ -123,7 +134,7 @@ run-gz: $(FIXED_CPIO_GZ) $(QCOW2_IMAGE)
 	  -cpu host -machine q35 \
 	  -append "console=ttyS0 earlyprintk=serial,ttyS0 debug loglevel=8 nokaslr" \
 	  -nographic \
-	  -netdev user,id=net0,hostfwd=tcp::10022-:22 \
+	  -netdev user,id=net0,hostfwd=tcp::10022-:40192 \
 	  -device e1000,netdev=net0 \
 	  -device virtio-scsi-pci,id=scsi0 \
 	  -drive file=$(QCOW2_IMAGE),if=none,id=persistent,format=qcow2 \
@@ -142,20 +153,19 @@ run-shell: $(FIXED_CPIO_GZ) $(QCOW2_IMAGE)
 	  -cpu host -machine q35 \
 	  -append "console=ttyS0 earlyprintk=serial,ttyS0 debug loglevel=8 nokaslr rdinit=/bin/sh" \
 	  -nographic \
-	  -netdev user,id=net0,hostfwd=tcp::10022-:22 \
+	  -netdev user,id=net0,hostfwd=tcp::10022-:40192 \
 	  -device e1000,netdev=net0 \
 	  -device virtio-scsi-pci,id=scsi0 \
 	  -drive file=$(QCOW2_IMAGE),if=none,id=persistent,format=qcow2 \
 	  -device scsi-hd,drive=persistent,bus=scsi0.0,lun=10
 
 # Force rebuild of initramfs
-rebuild:
-	rm -f $(EXTRACT_DONE) $(INJECT_DONE) $(FIXED_CPIO) $(FIXED_CPIO_GZ)
+rebuild: clean
 	$(MAKE) inject
 
 # Clean up
 clean:
-	rm -rf $(WORKDIR)
+	sudo rm -rf $(WORKDIR)
 
 # Very clean (includes disk image)
 distclean: clean
