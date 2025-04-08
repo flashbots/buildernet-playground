@@ -17,7 +17,7 @@ QEMU_SMP := 4
 
 # SSH key for development (comment out if you don't want to inject a key)
 # Will use ~/.ssh/id_rsa.pub as default if it exists
-SSH_KEY_PATH := $(shell if [ -f ~/.ssh/id_rsa.pub ]; then echo ~/.ssh/id_rsa.pub; fi)
+SSH_KEY_PATH ?= $(shell if [ -f ~/.ssh/id_rsa.pub ]; then echo ~/.ssh/id_rsa.pub; fi)
 
 # Default target
 all: inject
