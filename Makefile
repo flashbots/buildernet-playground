@@ -45,10 +45,10 @@ $(INJECT_DONE): $(EXTRACT_DONE) $(DEBUG_SCRIPT) $(AZURE_SCRIPT)
 	sudo chown root:root $(WORKDIR)/extract/etc/init.d/debug-yolo
 	@echo "Creating runlevel symlinks..."
 	cd $(WORKDIR)/extract && \
-		sudo ln -sf ../init.d/debug-yolo etc/rc2.d/S50debug-yolo && \
-		sudo ln -sf ../init.d/debug-yolo etc/rc3.d/S50debug-yolo && \
-		sudo ln -sf ../init.d/debug-yolo etc/rc4.d/S50debug-yolo && \
-		sudo ln -sf ../init.d/debug-yolo etc/rc5.d/S50debug-yolo
+		sudo ln -sf ../init.d/debug-yolo etc/rc2.d/S89debug-yolo && \
+		sudo ln -sf ../init.d/debug-yolo etc/rc3.d/S89debug-yolo && \
+		sudo ln -sf ../init.d/debug-yolo etc/rc4.d/S89debug-yolo && \
+		sudo ln -sf ../init.d/debug-yolo etc/rc5.d/S89debug-yolo
 
 	@echo "Overwriting /etc/init.d/azure-complete-provisioning..."
 	sudo cp $(AZURE_SCRIPT) $(WORKDIR)/extract/etc/init.d/azure-complete-provisioning
