@@ -1,8 +1,11 @@
 # Configuration variables
-BZIMAGE_PATH := $(PWD)/bzImage
-ORIGINAL_CPIO := $(PWD)/cvm-initramfs-tdx.cpio.gz
+BZIMAGE_PATH ?= $(PWD)/bzImage
+ORIGINAL_CPIO ?= $(PWD)/cvm-initramfs-tdx.cpio.gz
 DEBUG_SCRIPT := $(PWD)/debug-yolo
 AZURE_SCRIPT := $(PWD)/azure-complete-provisioning
+DISK_ENCRYPTION_INIT_SCRIPT := $(PWD)/disk-encryption
+RETH_SYNC_SCRIPT := $(PWD)/reth-sync
+CVM_REVERSE_PROXY_CLIENT_INIT_SCRIPT := $(PWD)/cvm-reverse-proxy-client-init
 WORKDIR := $(PWD)/build
 EXTRACT_DONE := $(WORKDIR)/.extract_done
 INJECT_DONE := $(WORKDIR)/.inject_done
@@ -12,8 +15,8 @@ QCOW2_IMAGE := $(PWD)/persistent.qcow2
 QCOW2_SIZE := 2T
 
 # SSH & port configuration
-QEMU_MEM := 4G
-QEMU_SMP := 4
+QEMU_MEM ?= 8G
+QEMU_SMP ?= 8
 
 # SSH key for development (comment out if you don't want to inject a key)
 # Will use ~/.ssh/id_rsa.pub as default if it exists
@@ -51,6 +54,21 @@ $(INJECT_DONE): $(EXTRACT_DONE) $(DEBUG_SCRIPT) $(AZURE_SCRIPT)
 	sudo cp $(AZURE_SCRIPT) $(WORKDIR)/extract/etc/init.d/azure-complete-provisioning
 	sudo chmod +x $(WORKDIR)/extract/etc/init.d/azure-complete-provisioning
 	sudo chown root:root $(WORKDIR)/extract/etc/init.d/azure-complete-provisioning
+
+	@echo "Overwriting /etc/init.d/disk-encryption..."
+	sudo cp $(DISK_ENCRYPTION_INIT_SCRIPT) $(WORKDIR)/extract/etc/init.d/disk-encryption
+	sudo chmod +x $(WORKDIR)/extract/etc/init.d/disk-encryption
+	sudo chown root:root $(WORKDIR)/extract/etc/init.d/disk-encryption
+
+	@echo "Overwriting /etc/init.d/cvm-reverse-proxy-client-init..."
+	sudo cp $(CVM_REVERSE_PROXY_CLIENT_INIT_SCRIPT) $(WORKDIR)/extract/etc/init.d/cvm-reverse-proxy-client-init
+	sudo chmod +x $(WORKDIR)/extract/etc/init.d/cvm-reverse-proxy-client-init
+	sudo chown root:root $(WORKDIR)/extract/etc/init.d/cvm-reverse-proxy-client-init
+
+	@echo "Overwriting /etc/init.d/reth-sync..."
+	sudo cp $(RETH_SYNC_SCRIPT) $(WORKDIR)/extract/etc/init.d/reth-sync
+	sudo chmod +x $(WORKDIR)/extract/etc/init.d/reth-sync
+	sudo chown root:root $(WORKDIR)/extract/etc/init.d/reth-sync
 
 	@echo "Setting up SSH directories..."
 	@if [ -n "$(SSH_KEY_PATH)" ] && [ -f "$(SSH_KEY_PATH)" ]; then \

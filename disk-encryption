@@ -1,0 +1,234 @@
+#!/bin/sh
+set -eu -o pipefail
+
+### BEGIN INIT INFO
+# Provides:             disk-encryption
+# Required-Start:       $remote_fs $syslog $networking
+# Required-Stop:        $remote_fs $syslog
+# Default-Start:        2 3 4 5
+# Default-Stop:         1
+# Short-Description:    Start and stop the disk-encryption daemon
+### END INIT INFO
+
+# Source environment variables if file exists
+[ -r /etc/default/disk-encryption ] && . /etc/default/disk-encryption
+
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+NAME=disk-encryption
+DESC="Disk Encryption"
+KEYSIZE=64
+LOGFILE=/var/log/disk-encryption.log
+TPM_NV_INDEX=0x1500016
+SYSTEM_API_FIFO=/var/volatile/system-api.fifo
+
+# Export TPM2TOOLS_TCTI
+export TPM2TOOLS_TCTI="device:/dev/tpmrm0"
+
+log() {
+    if [ -p $SYSTEM_API_FIFO ]; then
+        date_log() {
+            echo -n ""
+        }
+    else
+        date_log() {
+            echo -n "$(date): "
+        }
+    fi
+    echo "$(date_log)$1" >&2 | tee -a $SYSTEM_API_FIFO $LOGFILE
+}
+
+find_target_disk() {
+    local target_path
+    local attempt=0
+    local max_attempts=30
+    local wait_interval=10
+
+    # Try to find disk by LUN with retries
+    while [ $attempt -lt $max_attempts ]; do
+        target_path=$(readlink -f /dev/disk/by-path/*scsi-0:0:0:${TARGET_LUN} 2>/dev/null || true)
+
+        if [ -n "$target_path" ] && [ -b "$target_path" ]; then
+            log "Found target disk at ${target_path} using LUN ${TARGET_LUN}"
+            echo "$target_path"
+            return 0
+        fi
+
+        attempt=$((attempt + 1))
+        if [ $attempt -lt $max_attempts ]; then
+            log "Attempt ${attempt}/${max_attempts}: Waiting ${wait_interval} seconds for target disk to become available..."
+            sleep $wait_interval
+        fi
+    done
+
+    log "Target disk not found after ${max_attempts} attempts, falling back to largest disk detection"
+
+    # Fallback: Simply find largest disk
+    local largest_disk
+    largest_disk=$(lsblk -bdnpo NAME,SIZE | grep "^/dev/sd" | sort -k2 -nr | head -n 1 | awk '{print $1}')
+    if [ -n "$largest_disk" ] && [ -b "$largest_disk" ]; then
+        log "Found largest disk: ${largest_disk}"
+        echo "${largest_disk}"
+        return 0
+    fi
+
+    log "No suitable target disk found"
+    return 1
+}
+
+generate_key() {
+    local key=""
+    if [ -e /dev/hwrng ]; then
+        key=$(dd if=/dev/hwrng bs=1024 count=1 2>/dev/null | tr -dc 'a-zA-Z0-9' | dd bs=1 count=$KEYSIZE 2>/dev/null)
+    fi
+
+    # If hardware RNG failed or is not available, use /dev/urandom
+    if [ -z "$key" ]; then
+        log "Using /dev/urandom for key generation"
+        key=$(dd if=/dev/urandom bs=1024 count=1 2>/dev/null | tr -dc 'a-zA-Z0-9' | dd bs=1 count=$KEYSIZE 2>/dev/null)
+    fi
+
+    if [ ${#key} -ne $KEYSIZE ]; then
+        log "Failed to generate a key of correct length. Generated length: ${#key}"
+        return 1
+    fi
+
+    echo "$key"
+}
+
+get_key() {
+    case "$DISK_ENCRYPTION_KEY_STORAGE" in
+        tpm2)
+            get_key_from_tpm
+            ;;
+        file)
+            if [ -z "$DISK_ENCRYPTION_KEY_FILE" ]; then
+                log "DISK_ENCRYPTION_KEY_FILE not set"
+                return 1
+            fi
+            get_key_from_file
+            ;;
+        *)
+            log "Invalid DISK_ENCRYPTION_KEY_STORAGE value: $DISK_ENCRYPTION_KEY_STORAGE"
+            return 1
+            ;;
+    esac
+}
+
+store_key_in_tpm() {
+    local key="$1"
+
+    # Undefine the NV index if it exists
+    tpm2_nvundefine $TPM_NV_INDEX 2>/dev/null || true
+    log "Undefined existing NV index (if any)"
+
+    # Define the area for the key on the TPM2
+    if ! tpm2_nvdefine -s $KEYSIZE $TPM_NV_INDEX; then
+        log "Failed to define TPM NV index. Aborting."
+        return 1
+    fi
+    log "Defined new NV index"
+
+    # Store the key in the TPM
+    if ! echo -n "$key" | tpm2_nvwrite $TPM_NV_INDEX -i-; then
+        log "Failed to write key to TPM NV index. Aborting."
+        tpm2_nvundefine $TPM_NV_INDEX 2>/dev/null || true  # Clean up on failure
+        return 1
+    fi
+    log "Successfully stored key in TPM"
+}
+
+get_key_from_tpm() {
+    # Attempt to read from the TPM2
+    local key
+    key=$(tpm2_nvread $TPM_NV_INDEX 2>>$LOGFILE) || {
+        local exit_code=$?
+        log "Failed to read TPM NV index (exit code $exit_code). Check $LOGFILE for details."
+        return $exit_code
+    }
+    printf "%s" "$key"
+    return 0
+}
+
+get_key_from_file() {
+    if [ ! -f "$DISK_ENCRYPTION_KEY_FILE" ]; then
+        log "Key file not found: $DISK_ENCRYPTION_KEY_FILE"
+        return 1
+    fi
+
+    local key
+    key=$(cat "$DISK_ENCRYPTION_KEY_FILE")
+
+    printf "%s" "$key"
+    rm -f "$DISK_ENCRYPTION_KEY_FILE"
+    return 0
+}
+
+start() {
+    log "Starting $DESC"
+
+    # Find target disk
+    TARGET_DISK=$(find_target_disk)
+    if [ $? -ne 0 ] || [ -z "$TARGET_DISK" ]; then
+        log "Failed to find target disk. Aborting disk encryption setup."
+        return 1
+    fi
+    log "Using disk: ${TARGET_DISK}"
+
+    exit_code=0
+    KEY=$(get_key) || exit_code=$?
+    if [ $exit_code -ne 0 ] || [ -z "$KEY" ]; then
+        if [ "$DISK_ENCRYPTION_KEY_STORAGE" = "tpm2" ]; then
+            log "No existing key in TPM. Generating new key."
+            KEY=$(generate_key)
+            if [ $? -ne 0 ] || [ -z "$KEY" ]; then
+                log "Key generation failed. Aborting."
+                return 1
+            fi
+            if ! store_key_in_tpm "$KEY"; then
+                log "Failed to store new key in TPM. Aborting."
+                return 1
+            fi
+            log "New key generated and stored in TPM."
+        else
+            log "Failed to read encryption key. Aborting."
+            return 1
+        fi
+    else
+        log "Existing key retrieved from storage."
+    fi
+
+    if ! echo -n "$KEY" | cryptsetup luksOpen "${TARGET_DISK}" data - ; then
+        log "LUKS volume not opened successfully. Formatting and creating filesystem."
+        if ! echo -n "$KEY" | cryptsetup -q --batch-mode luksFormat "${TARGET_DISK}"; then
+            log "Failed to format LUKS volume. Aborting."
+            return 1
+        fi
+        if ! echo -n "$KEY" | cryptsetup luksOpen "${TARGET_DISK}" data - ; then
+            log "Failed to open LUKS volume after formatting. Aborting."
+            return 1
+        fi
+        if ! mkfs.ext4 /dev/mapper/data; then
+            log "Failed to create filesystem on LUKS volume. Aborting."
+            return 1
+        fi
+    fi
+    mkdir -p /persistent
+    if ! mount /dev/mapper/data /persistent; then
+        log "Failed to mount LUKS volume. Aborting."
+        return 1
+    fi
+    log "$NAME started successfully."
+}
+
+case "$1" in
+  start)
+        start
+        ;;
+  *)
+    N=/etc/init.d/$NAME
+    echo "Usage: $N start" >&2
+    exit 1
+    ;;
+esac
+
+exit 0
