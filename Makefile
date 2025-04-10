@@ -6,6 +6,8 @@ AZURE_SCRIPT := $(PWD)/azure-complete-provisioning
 DISK_ENCRYPTION_INIT_SCRIPT := $(PWD)/disk-encryption
 RETH_SYNC_SCRIPT := $(PWD)/reth-sync
 CVM_REVERSE_PROXY_CLIENT_INIT_SCRIPT := $(PWD)/cvm-reverse-proxy-client-init
+LIGHTHOUSE_INIT_SCRIPT := $(PWD)/lighthouse
+RETH_INIT_SCRIPT := $(PWD)/reth
 WORKDIR := $(PWD)/build
 EXTRACT_DONE := $(WORKDIR)/.extract_done
 INJECT_DONE := $(WORKDIR)/.inject_done
@@ -70,6 +72,16 @@ $(INJECT_DONE): $(EXTRACT_DONE) $(DEBUG_SCRIPT) $(AZURE_SCRIPT)
 	sudo chmod +x $(WORKDIR)/extract/etc/init.d/reth-sync
 	sudo chown root:root $(WORKDIR)/extract/etc/init.d/reth-sync
 
+	@echo "Overwriting /etc/init.d/lighthouse..."
+	sudo cp $(LIGHTHOUSE_INIT_SCRIPT) $(WORKDIR)/extract/etc/init.d/lighthouse
+	sudo chmod +x $(WORKDIR)/extract/etc/init.d/lighthouse
+	sudo chown root:root $(WORKDIR)/extract/etc/init.d/lighthouse
+
+	@echo "Overwriting /etc/init.d/reth..."
+	sudo cp $(RETH_INIT_SCRIPT) $(WORKDIR)/extract/etc/init.d/reth
+	sudo chmod +x $(WORKDIR)/extract/etc/init.d/reth
+	sudo chown root:root $(WORKDIR)/extract/etc/init.d/reth
+
 	@echo "Setting up SSH directories..."
 	@if [ -n "$(SSH_KEY_PATH)" ] && [ -f "$(SSH_KEY_PATH)" ]; then \
 		echo "Injecting SSH key from $(SSH_KEY_PATH)..."; \
@@ -133,7 +145,7 @@ run: $(FIXED_CPIO) $(QCOW2_IMAGE)
 	  -cpu host -machine q35 \
 	  -append "console=ttyS0 earlyprintk=serial,ttyS0 debug loglevel=8 nokaslr" \
 	  -nographic \
-	  -netdev user,id=net0,hostfwd=tcp::10022-:40192 \
+	  -netdev user,id=net0,hostfwd=tcp::10022-:40192,hostfwd=tcp::19000-:9000,hostfwd=udp::19000-:9000,hostfwd=tcp::19100-:9100,hostfwd=tcp::13500-:3500,hostfwd=tcp::39303-:30303,hostfwd=tcp::18545-:8545,hostfwd=tcp::18551-:8551 \
 	  -device e1000,netdev=net0 \
 	  -device virtio-scsi-pci,id=scsi0 \
 	  -drive file=$(QCOW2_IMAGE),if=none,id=persistent,format=qcow2 \
@@ -152,7 +164,7 @@ run-gz: $(FIXED_CPIO_GZ) $(QCOW2_IMAGE)
 	  -cpu host -machine q35 \
 	  -append "console=ttyS0 earlyprintk=serial,ttyS0 debug loglevel=8 nokaslr" \
 	  -nographic \
-	  -netdev user,id=net0,hostfwd=tcp::10022-:40192 \
+	  -netdev user,id=net0,hostfwd=tcp::10022-:40192,hostfwd=tcp::19000-:9000,hostfwd=udp::19000-:9000,hostfwd=tcp::19100-:9100,hostfwd=tcp::13500-:3500,hostfwd=tcp::39303-:30303,hostfwd=tcp::18545-:8545,hostfwd=tcp::18551-:8551 \
 	  -device e1000,netdev=net0 \
 	  -device virtio-scsi-pci,id=scsi0 \
 	  -drive file=$(QCOW2_IMAGE),if=none,id=persistent,format=qcow2 \
@@ -171,7 +183,7 @@ run-shell: $(FIXED_CPIO_GZ) $(QCOW2_IMAGE)
 	  -cpu host -machine q35 \
 	  -append "console=ttyS0 earlyprintk=serial,ttyS0 debug loglevel=8 nokaslr rdinit=/bin/sh" \
 	  -nographic \
-	  -netdev user,id=net0,hostfwd=tcp::10022-:40192 \
+	  -netdev user,id=net0,hostfwd=tcp::10022-:40192,hostfwd=tcp::19000-:9000,hostfwd=udp::19000-:9000,hostfwd=tcp::19100-:9100,hostfwd=tcp::13500-:3500,hostfwd=tcp::39303-:30303,hostfwd=tcp::18545-:8545,hostfwd=tcp::18551-:8551 \
 	  -device e1000,netdev=net0 \
 	  -device virtio-scsi-pci,id=scsi0 \
 	  -drive file=$(QCOW2_IMAGE),if=none,id=persistent,format=qcow2 \
