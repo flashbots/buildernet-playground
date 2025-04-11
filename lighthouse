@@ -51,7 +51,7 @@ start_lighthouse() {
         --execution-endpoint http://localhost:8551 \
         --checkpoint-sync-url http://10.0.2.2:3500 \
         --disable-discovery \
-        --libp2p-addresses "/ip4/10.0.2.2/tcp/9000/p2p/16Uiu2HAmJVxj2SAAEv8A6N9cZjSta1VrbCBwBTfWtLT2uBD2mH5V" \
+        --libp2p-addresses "/ip4/10.0.2.2/tcp/9000/p2p/16Uiu2HAmVaYBv73iKbTxyNNaddY1nncLcttL2rEa7emB8feKdFN1" \
         --testnet-dir "$TESTNET_DIR" \
 		--datadir "$LIGHTHOUSE_DIR" \
 		2>&1 | tee ${LOGFILE}"
