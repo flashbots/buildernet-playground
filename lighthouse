@@ -23,7 +23,6 @@ LIGHTHOUSE_DIR=/persistent/lighthouse
 TESTNET_DIR=/persistent/testnet
 SUGGESTED_FEE_RECIPIENT=0x000000000000000000000000000000000000dead
 JWT_SECRET_FILE=/var/volatile/jwt.hex
-ENR_BOOT_NODE=enr:-OS4QFdhWct_5HFlWyMvPx1MXkhTeqOJQ17PhHHIVdLnYNSlWv3E68APAniFPsz0Dt3iBrovWXHcqF8s2DofsMjURhkHh2F0dG5ldHOIAGAAAAAAAACGY2xpZW502IpMaWdodGhvdXNljDcuMC4wLWJldGEuMIRldGgykL_JABcgAACT__________-CaWSCdjSCaXCECgACAoRxdWljgiOMiXNlY3AyNTZrMaECCa13jv287gRgD28tUW69htAWCeC55Yglue81W8yPIdyIc3luY25ldHMPg3RjcIIjKIN1ZHCCIyg
 
 monitor_and_restart() {
     while true; do
@@ -39,21 +38,21 @@ monitor_and_restart() {
 start_lighthouse() {
 		start-stop-daemon -S --make-pidfile -p $PIDFILE -c $LIGHTHOUSE_USER:$ETH_GROUP -N -10 -b -a /bin/sh -- -c "exec ${DAEMON} \
 		bn \
-		--execution-endpoint http://localhost:8551 \
 		--execution-jwt $JWT_SECRET_FILE \
-		--staking \
-        --enr-address 10.0.2.15 \
-        --enr-udp-port 9000 \
-        --enr-tcp-port 9000 \
-		--http \
-		--port 9000 \
-		--http-port 3500 \
-        --http-address 0.0.0.0 \
 		--metrics \
 		--metrics-address 127.0.0.1 \
 		--metrics-port 5054 \
-        --boot-nodes "$ENR_BOOT_NODE"\
-        --testnet-dir $TESTNET_DIR \
+        --staking \
+        --enr-address 10.0.2.15 \
+        --port 9000 \
+        --http \
+        --http-port 3500 \
+        --http-address 0.0.0.0 \
+        --execution-endpoint http://localhost:8551 \
+        --checkpoint-sync-url http://10.0.2.2:3500 \
+        --disable-discovery \
+        --libp2p-addresses "/ip4/10.0.2.2/tcp/9000/p2p/16Uiu2HAmJVxj2SAAEv8A6N9cZjSta1VrbCBwBTfWtLT2uBD2mH5V" \
+        --testnet-dir "$TESTNET_DIR" \
 		--datadir "$LIGHTHOUSE_DIR" \
 		2>&1 | tee ${LOGFILE}"
 }
