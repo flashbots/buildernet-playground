@@ -52,8 +52,15 @@ start_lighthouse() {
         --execution-endpoint http://localhost:8551 \
         --checkpoint-sync-url http://10.0.2.2:3500 \
         --disable-discovery \
-        --libp2p-addresses "/ip4/10.0.2.2/tcp/9000/p2p/16Uiu2HAmTMychwu9DMFiiw6kzS9XkNUyokY4BHUti1nhJHBxvKqQ" \
-        --trusted-peers "16Uiu2HAmTMychwu9DMFiiw6kzS9XkNUyokY4BHUti1nhJHBxvKqQ" \
+        --enable-private-discovery \
+        --private \
+        --disable-upnp \
+        --reconstruct-historic-states \
+        --disable-backfill-rate-limiting \
+        --disable-packet-filter \
+        --subscribe-all-subnets \
+        --libp2p-addresses "/ip4/10.0.2.2/tcp/9000/p2p/16Uiu2HAm5VS3fhyjoscwXqfuJgccBD7DVJDqdc69JM5PvDKRhE77" \
+        --trusted-peers "16Uiu2HAm5VS3fhyjoscwXqfuJgccBD7DVJDqdc69JM5PvDKRhE77" \
         --suggested-fee-recipient $SUGGESTED_FEE_RECIPIENT \
         --testnet-dir "$TESTNET_DIR" \
 		--datadir "$LIGHTHOUSE_DIR" \

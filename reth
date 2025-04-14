@@ -59,9 +59,9 @@ start() {
     --log.stdout.format json \
     --log.file.max-files 0 \
     --metrics "127.0.0.1:9001" \
-    --bootnodes "enode://5bf8d1ee226c4f70a8e0dc169d90cf8a817cf870ac2f9b80f6fc5b8c4baaf503b7b856ddb3e945e2adfcf078276ba37d8f1c4c75cb6c059f7a5e07f28ddae81d@10.0.2.2:30303" \
+    --bootnodes "enode://700bd841a1f2b268d3fd24fa7cb49cc1402962050223e9e0b484221fec80ea4b6dbb8a8f23b8fb61b7c4892b91464dc3843c721ed346c590c78e95025e914788@10.0.2.2:30303" \
     --nat extip:10.0.2.15 \
-    --trusted-peers enode://5bf8d1ee226c4f70a8e0dc169d90cf8a817cf870ac2f9b80f6fc5b8c4baaf503b7b856ddb3e945e2adfcf078276ba37d8f1c4c75cb6c059f7a5e07f28ddae81d@10.0.2.2:30303 \
+    --trusted-peers enode://700bd841a1f2b268d3fd24fa7cb49cc1402962050223e9e0b484221fec80ea4b6dbb8a8f23b8fb61b7c4892b91464dc3843c721ed346c590c78e95025e914788@10.0.2.2:30303 \
     2>&1 | tee ${LOGFILE}"
 
   while [ ! -e /tmp/reth.ipc ]; do

@@ -34,6 +34,28 @@ start() {
     # Create the timeout handler
     create_auto_continue
     
+    # Wait for host services to be available
+    echo "Waiting for host services to be ready..."
+    while ! curl -s http://10.0.2.2:3500/eth/v1/node/identity > /dev/null; do
+    sleep 5
+    done
+
+    # Get host peer IDs
+    HOST_LIGHTHOUSE_PEER_ID=$(curl -s http://10.0.2.2:3500/eth/v1/node/identity | grep -o '"peer_id":"[^"]*' | cut -d'"' -f4)
+    HOST_RETH_ENODE=$(curl -s -X POST -H "Content-Type: application/json" \
+    --data '{"jsonrpc":"2.0","method":"admin_nodeInfo","params":[],"id":1}' \
+    http://10.0.2.2:8545 | grep -o '"enode":"[^"]*' | cut -d'"' -f4 | sed 's/@.*/@10.0.2.2:30303/')
+
+    # Update lighthouse init script
+    sed -i "s|--trusted-peers.*|--trusted-peers \"$HOST_LIGHTHOUSE_PEER_ID\" \\\\|" /etc/init.d/lighthouse
+    sed -i "s|--libp2p-addresses.*|--libp2p-addresses \"/ip4/10.0.2.2/tcp/9000/p2p/$HOST_LIGHTHOUSE_PEER_ID\" \\\\|" /etc/init.d/lighthouse
+
+    # Update reth init script
+    sed -i "s|--bootnodes.*|--bootnodes \"$HOST_RETH_ENODE\" \\\\|" /etc/init.d/reth
+    sed -i "s|--trusted-peers enode:.*|--trusted-peers $HOST_RETH_ENODE \\\\|" /etc/init.d/reth
+
+    echo "Peering information updated."
+
     # Wait for continue file
     log "========================================================"
     log "BOOT PROCESS PAUSED FOR DEBUG ACCESS"

@@ -189,6 +189,23 @@ run-shell: $(FIXED_CPIO_GZ) $(QCOW2_IMAGE)
 	  -drive file=$(QCOW2_IMAGE),if=none,id=persistent,format=qcow2 \
 	  -device scsi-hd,drive=persistent,bus=scsi0.0,lun=10
 
+post-provision:
+	# Transfer all files first
+	scp -P 10022 -r builder-playground/output/data_beacon_node/beacon/network/ root@localhost:/persistent/network
+	scp -P 10022 -r builder-playground/output/genesis.json root@localhost:/persistent/
+	scp -P 10022 -r builder-playground/output/testnet/ root@localhost:/persistent/
+	scp -P 10022 ./lighthouse-bin root@localhost:/usr/bin/lighthouse
+
+	# Then set permissions and ownership with a single SSH command
+	ssh -p 10022 root@localhost "chown -R lighthouse:eth /persistent/network/ /persistent/testnet/ && \
+		chmod -R 775 /persistent/network/ /persistent/testnet/ && \
+		chown reth:eth /persistent/genesis.json && \
+		chmod 775 /persistent/genesis.json && \
+		chown root:root /usr/bin/lighthouse && \
+		chmod 755 /usr/bin/lighthouse"
+
+	@echo "Post-provisioning completed successfully!"
+
 # Force rebuild of initramfs
 rebuild: clean
 	$(MAKE) inject
