@@ -1,8 +1,8 @@
 #!/bin/sh
 ### BEGIN INIT INFO
 # Provides:          debug-yolo
-# Required-Start:	 $remote_fs $syslog $networking
-# Required-Stop:	 $remote_fs $syslog 
+# Required-Start:    $remote_fs $syslog $networking
+# Required-Stop:     $remote_fs $syslog 
 # Default-Start:     2 3 4 5
 # Default-Stop:      
 # Short-Description: Ultra minimal debugging
@@ -16,7 +16,6 @@ CONTINUE_FILE=/tmp/continue-boot
 log() {
     echo "DEBUG-YOLO: $1"
 }
-
 
 create_auto_continue() {
     # Create a file that will automatically continue boot after timeout
@@ -37,24 +36,52 @@ start() {
     # Wait for host services to be available
     echo "Waiting for host services to be ready..."
     while ! curl -s http://10.0.2.2:3500/eth/v1/node/identity > /dev/null; do
-    sleep 5
+        sleep 5
+        echo "Still waiting for host Lighthouse..."
     done
 
-    # Get host peer IDs
-    HOST_LIGHTHOUSE_PEER_ID=$(curl -s http://10.0.2.2:3500/eth/v1/node/identity | grep -o '"peer_id":"[^"]*' | cut -d'"' -f4)
+    # Get host peer information with better error handling
+    log "Fetching host Lighthouse identity..."
+    HOST_LIGHTHOUSE_IDENTITY=$(curl -s http://10.0.2.2:3500/eth/v1/node/identity)
+    if [ -z "$HOST_LIGHTHOUSE_IDENTITY" ]; then
+        log "ERROR: Failed to get host identity data!"
+        return 1
+    fi
+    
+    HOST_LIGHTHOUSE_PEER_ID=$(echo "$HOST_LIGHTHOUSE_IDENTITY" | grep -o '"peer_id":"[^"]*' | cut -d'"' -f4)
+    HOST_LIGHTHOUSE_ENR=$(echo "$HOST_LIGHTHOUSE_IDENTITY" | grep -o '"enr":"[^"]*' | cut -d'"' -f4)
+
+    # Log what we found
+    log "Host lighthouse peer ID: $HOST_LIGHTHOUSE_PEER_ID"
+    log "Host lighthouse ENR found (first 30 chars): ${HOST_LIGHTHOUSE_ENR:0:30}..."
+
+    # Get host Reth enode
+    log "Fetching host Reth node info..."
     HOST_RETH_ENODE=$(curl -s -X POST -H "Content-Type: application/json" \
     --data '{"jsonrpc":"2.0","method":"admin_nodeInfo","params":[],"id":1}' \
     http://10.0.2.2:8545 | grep -o '"enode":"[^"]*' | cut -d'"' -f4 | sed 's/@.*/@10.0.2.2:30303/')
 
+    log "Host Reth enode: $HOST_RETH_ENODE"
+
     # Update lighthouse init script
-    sed -i "s|--trusted-peers.*|--trusted-peers \"$HOST_LIGHTHOUSE_PEER_ID\" \\\\|" /etc/init.d/lighthouse
-    sed -i "s|--libp2p-addresses.*|--libp2p-addresses \"/ip4/10.0.2.2/tcp/9000/p2p/$HOST_LIGHTHOUSE_PEER_ID\" \\\\|" /etc/init.d/lighthouse
+    log "Updating Lighthouse init script..."
+    sed -i "s|--boot-nodes.*|--boot-nodes '${HOST_LIGHTHOUSE_ENR}' \\\\|" /etc/init.d/lighthouse
+    sed -i "s|--trusted-peers.*|--trusted-peers \"${HOST_LIGHTHOUSE_PEER_ID}\" \\\\|" /etc/init.d/lighthouse
+    
+    # Verify the changes
+    log "Verifying Lighthouse script updates:"
+    grep "boot-nodes" /etc/init.d/lighthouse
+    grep "trusted-peers" /etc/init.d/lighthouse
 
     # Update reth init script
+    log "Updating Reth init script..."
     sed -i "s|--bootnodes.*|--bootnodes \"$HOST_RETH_ENODE\" \\\\|" /etc/init.d/reth
     sed -i "s|--trusted-peers enode:.*|--trusted-peers $HOST_RETH_ENODE \\\\|" /etc/init.d/reth
 
-    echo "Peering information updated."
+    # Verify the changes
+    log "Verifying Reth script updates:"
+    grep "bootnodes" /etc/init.d/reth
+    grep "trusted-peers" /etc/init.d/reth
 
     # Wait for continue file
     log "========================================================"

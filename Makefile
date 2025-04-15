@@ -204,6 +204,9 @@ post-provision:
 		chown root:root /usr/bin/lighthouse && \
 		chmod 755 /usr/bin/lighthouse"
 
+	# Continue booting after provisioning
+	ssh -p 10022 root@localhost "touch /tmp/continue-boot"
+
 	@echo "Post-provisioning completed successfully!"
 
 # Force rebuild of initramfs

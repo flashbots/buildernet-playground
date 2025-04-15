@@ -37,35 +37,39 @@ monitor_and_restart() {
 }
 
 start_lighthouse() {
-		start-stop-daemon -S --make-pidfile -p $PIDFILE -c $LIGHTHOUSE_USER:$ETH_GROUP -N -10 -b -a /bin/sh -- -c "exec ${DAEMON} \
-		bn \
-		--execution-jwt $JWT_SECRET_FILE \
-		--metrics \
-		--metrics-address 127.0.0.1 \
-		--metrics-port 5054 \
-        --staking \
-        --enr-address 10.0.2.15 \
-        --port 9000 \
-        --http \
-        --http-port 3500 \
-        --http-address 0.0.0.0 \
-        --execution-endpoint http://localhost:8551 \
-        --checkpoint-sync-url http://10.0.2.2:3500 \
-        --disable-discovery \
-        --enable-private-discovery \
-        --private \
-        --disable-upnp \
-        --reconstruct-historic-states \
-        --disable-backfill-rate-limiting \
-        --disable-packet-filter \
-        --subscribe-all-subnets \
-        --libp2p-addresses "/ip4/10.0.2.2/tcp/9000/p2p/16Uiu2HAm5VS3fhyjoscwXqfuJgccBD7DVJDqdc69JM5PvDKRhE77" \
-        --trusted-peers "16Uiu2HAm5VS3fhyjoscwXqfuJgccBD7DVJDqdc69JM5PvDKRhE77" \
-        --suggested-fee-recipient $SUGGESTED_FEE_RECIPIENT \
-        --testnet-dir "$TESTNET_DIR" \
-		--datadir "$LIGHTHOUSE_DIR" \
-        --network-dir "$NETWORK_DIR" \
-		2>&1 | tee ${LOGFILE}"
+    # Clear data directory for fresh sync
+    rm -rf "$LIGHTHOUSE_DIR"/*
+
+    start-stop-daemon -S --make-pidfile -p $PIDFILE -c $LIGHTHOUSE_USER:$ETH_GROUP -N -10 -b -a /bin/sh -- -c "exec ${DAEMON} \
+    bn \
+    --execution-jwt $JWT_SECRET_FILE \
+    --metrics \
+    --metrics-address 127.0.0.1 \
+    --metrics-port 5054 \
+    --staking \
+    --enr-address 10.0.2.15 \
+    --port 9000 \
+    --http \
+    --http-port 3500 \
+    --http-address 0.0.0.0 \
+    --execution-endpoint http://localhost:8551 \
+    --checkpoint-sync-url http://10.0.2.2:3500 \
+    --checkpoint-sync-url-timeout 180 \
+    --private \
+    --disable-upnp \
+    --disable-packet-filter \
+    --subscribe-all-subnets \
+    --import-all-attestations \
+    --enable-private-discovery \
+    --boot-nodes 'enr:-MS4QOxRr6rruFNsBAS_PGTk779K6NEOyKSrMfGf8NABNUkfXrk_DyGleeMGpA9dQ5qBd4dwsLSaWDLpGZRIkEETjpwBh2F0dG5ldHOIAAAAAAAAAACEZXRoMpC_yQAXIAAAk___________gmlkgnY0gmlwhAoAAgKEcXVpY4IjjIlzZWNwMjU2azGhAs6Htxk7_G9pPnwVxyJ2erbh6jbSQGMBYviof6adLjYhiHN5bmNuZXRzAIN0Y3CCIyiDdWRwgiMo' \
+    --trusted-peers \"16Uiu2HAm9KszYdFhhhciHuXLZW4rQrv9HLJh19Yv64fmtFAmtqzY\" \
+    --target-peers 5 \
+    --debug-level debug \
+    --suggested-fee-recipient $SUGGESTED_FEE_RECIPIENT \
+    --testnet-dir \"$TESTNET_DIR\" \
+    --datadir \"$LIGHTHOUSE_DIR\" \
+    --network-dir \"$NETWORK_DIR\" \
+    2>&1 | tee ${LOGFILE}"
 }
 
 start() {
