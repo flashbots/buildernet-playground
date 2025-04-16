@@ -50,6 +50,7 @@ start() {
     
     HOST_LIGHTHOUSE_PEER_ID=$(echo "$HOST_LIGHTHOUSE_IDENTITY" | grep -o '"peer_id":"[^"]*' | cut -d'"' -f4)
     HOST_LIGHTHOUSE_ENR=$(echo "$HOST_LIGHTHOUSE_IDENTITY" | grep -o '"enr":"[^"]*' | cut -d'"' -f4)
+    HOST_P2P_ADDR=$(echo "$HOST_LIGHTHOUSE_IDENTITY" | grep -o '"p2p_addresses":\["[^"]*' | cut -d'"' -f4)
 
     # Log what we found
     log "Host lighthouse peer ID: $HOST_LIGHTHOUSE_PEER_ID"
@@ -67,11 +68,13 @@ start() {
     log "Updating Lighthouse init script..."
     sed -i "s|--boot-nodes.*|--boot-nodes '${HOST_LIGHTHOUSE_ENR}' \\\\|" /etc/init.d/lighthouse
     sed -i "s|--trusted-peers.*|--trusted-peers \"${HOST_LIGHTHOUSE_PEER_ID}\" \\\\|" /etc/init.d/lighthouse
+    sed -i "s|--libp2p-addresses.*|--libp2p-addresses \"${HOST_P2P_ADDR}\" \\\\|" /etc/init.d/lighthouse
     
     # Verify the changes
     log "Verifying Lighthouse script updates:"
     grep "boot-nodes" /etc/init.d/lighthouse
     grep "trusted-peers" /etc/init.d/lighthouse
+    grep "libp2p-addresses" /etc/init.d/lighthouse
 
     # Update reth init script
     log "Updating Reth init script..."

@@ -41,25 +41,25 @@ start() {
 
   start-stop-daemon -S --make-pidfile -p $PIDFILE -c $RETH_USER:$ETH_GROUP -N -10 -b -a /bin/sh -- -c "exec ${DAEMON} \
     node \
-    --chain "$GENSIS_FILE" \
-    --datadir "$RETH_DIR" \
+    --chain \"$GENSIS_FILE\" \
+    --datadir \"$RETH_DIR\" \
     --addr 0.0.0.0 \
     --port 30303 \
     --authrpc.addr 0.0.0.0 \
     --authrpc.port 8551 \
-    --authrpc.jwtsecret "$JWT_SECRET_FILE" \
+    --authrpc.jwtsecret \"$JWT_SECRET_FILE\" \
     --http \
     --http.addr 0.0.0.0 \
     --http.port 8545 \
-    --http.api "admin,eth,net,web3,trace,rpc,debug,txpool" \
+    --http.api \"admin,eth,net,web3,trace,rpc,debug,txpool\" \
     --ws \
     --ws.addr 0.0.0.0 \
     --ws.port 8546 \
-    --ws.api "eth,net,trace,web3,rpc,debug,txpool" \
+    --ws.api \"eth,net,trace,web3,rpc,debug,txpool\" \
     --log.stdout.format json \
     --log.file.max-files 0 \
-    --metrics "127.0.0.1:9001" \
-    --bootnodes "enode://700bd841a1f2b268d3fd24fa7cb49cc1402962050223e9e0b484221fec80ea4b6dbb8a8f23b8fb61b7c4892b91464dc3843c721ed346c590c78e95025e914788@10.0.2.2:30303" \
+    --metrics \"127.0.0.1:9001\" \
+    --bootnodes \"enode://700bd841a1f2b268d3fd24fa7cb49cc1402962050223e9e0b484221fec80ea4b6dbb8a8f23b8fb61b7c4892b91464dc3843c721ed346c590c78e95025e914788@10.0.2.2:30303\" \
     --nat extip:10.0.2.15 \
     --trusted-peers enode://700bd841a1f2b268d3fd24fa7cb49cc1402962050223e9e0b484221fec80ea4b6dbb8a8f23b8fb61b7c4892b91464dc3843c721ed346c590c78e95025e914788@10.0.2.2:30303 \
     2>&1 | tee ${LOGFILE}"

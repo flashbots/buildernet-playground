@@ -43,32 +43,29 @@ start_lighthouse() {
     start-stop-daemon -S --make-pidfile -p $PIDFILE -c $LIGHTHOUSE_USER:$ETH_GROUP -N -10 -b -a /bin/sh -- -c "exec ${DAEMON} \
     bn \
     --execution-jwt $JWT_SECRET_FILE \
-    --metrics \
-    --metrics-address 127.0.0.1 \
-    --metrics-port 5054 \
-    --staking \
     --enr-address 10.0.2.15 \
     --port 9000 \
+    --discovery-port 9000 \
+    --quic-port 9001 \
+    --enr-udp-port 9000 \
+    --enr-quic-port 9001 \
     --http \
     --http-port 3500 \
     --http-address 0.0.0.0 \
     --execution-endpoint http://localhost:8551 \
-    --checkpoint-sync-url http://10.0.2.2:3500 \
-    --checkpoint-sync-url-timeout 180 \
-    --private \
-    --disable-upnp \
     --disable-packet-filter \
     --subscribe-all-subnets \
     --import-all-attestations \
+    --private \
     --enable-private-discovery \
     --boot-nodes 'enr:-MS4QOxRr6rruFNsBAS_PGTk779K6NEOyKSrMfGf8NABNUkfXrk_DyGleeMGpA9dQ5qBd4dwsLSaWDLpGZRIkEETjpwBh2F0dG5ldHOIAAAAAAAAAACEZXRoMpC_yQAXIAAAk___________gmlkgnY0gmlwhAoAAgKEcXVpY4IjjIlzZWNwMjU2azGhAs6Htxk7_G9pPnwVxyJ2erbh6jbSQGMBYviof6adLjYhiHN5bmNuZXRzAIN0Y3CCIyiDdWRwgiMo' \
+    --libp2p-addresses \"/ip4/10.0.2.2/tcp/9000/p2p/16Uiu2HAm9KszYdFhhhciHuXLZW4rQrv9HLJh19Yv64fmtFAmtqzY\" \
     --trusted-peers \"16Uiu2HAm9KszYdFhhhciHuXLZW4rQrv9HLJh19Yv64fmtFAmtqzY\" \
     --target-peers 5 \
-    --debug-level debug \
+    --debug-level trace \
     --suggested-fee-recipient $SUGGESTED_FEE_RECIPIENT \
     --testnet-dir \"$TESTNET_DIR\" \
     --datadir \"$LIGHTHOUSE_DIR\" \
-    --network-dir \"$NETWORK_DIR\" \
     2>&1 | tee ${LOGFILE}"
 }
 
