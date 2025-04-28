@@ -36,7 +36,7 @@ This guide will walk you through setting up BuilderNet Playground, a local devel
 #### 1. Clone the Repository
 
 ```bash
-git clone --recursive https://github.com/yourusername/buildernet-playground.git
+git clone --recursive https://github.com/flashbots/buildernet-playground.git
 cd buildernet-playground
 ```
 
@@ -78,7 +78,9 @@ cd ..
 # that is compatible with the playground environment
 
 # Place the built binary in the main directory as lighthouse-bin
-# This will be copied to the VM during post-provisioning
+# Then Run this command:
+patchelf --set-interpreter /lib/ld-linux-x86-64.so.2 ./lighthouse-bin
+# The patched binary will be copied to the VM during post-provisioning
 ```
 
 #### 5. Run the VM
@@ -86,6 +88,10 @@ cd ..
 ```bash
 # This single command will extract the initramfs, inject custom scripts,
 # create the QEMU disk image, and run the VM
+# Prior running this command, please make sure you downloaded
+# the buildernet image artificats:
+#   "bzImage"
+#   "cvm-initramfs-tdx.cpio.gz"
 make run-gz
 ```
 
