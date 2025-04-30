@@ -191,14 +191,12 @@ run-shell: $(FIXED_CPIO_GZ) $(QCOW2_IMAGE)
 
 post-provision:
 	# Transfer all files first
-	scp -P 10022 -r builder-playground/output/data_beacon_node/beacon/network/ root@localhost:/persistent/network
-	scp -P 10022 -r builder-playground/output/genesis.json root@localhost:/persistent/
-	scp -P 10022 -r builder-playground/output/testnet/ root@localhost:/persistent/
-	scp -P 10022 ./lighthouse-bin root@localhost:/usr/bin/lighthouse
+	scp -P 10022 -r builder-playground/output/genesis.json root@localhost:/persistent
+	scp -P 10022 -r builder-playground/output/testnet/ root@localhost:/persistent
 
 	# Then set permissions and ownership with a single SSH command
-	ssh -p 10022 root@localhost "chown -R lighthouse:eth /persistent/network/ /persistent/testnet/ && \
-		chmod -R 775 /persistent/network/ /persistent/testnet/ && \
+	ssh -p 10022 root@localhost "chown -R lighthouse:eth /persistent/testnet/ && \
+		chmod -R 775 /persistent/testnet/ && \
 		chown reth:eth /persistent/genesis.json && \
 		chmod 775 /persistent/genesis.json && \
 		chown root:root /usr/bin/lighthouse && \

@@ -21,7 +21,6 @@ LIGHTHOUSE_USER=lighthouse
 ETH_GROUP=eth
 LIGHTHOUSE_DIR=/persistent/lighthouse
 TESTNET_DIR=/persistent/testnet
-NETWORK_DIR=/persistent/network
 SUGGESTED_FEE_RECIPIENT=0x000000000000000000000000000000000000dead
 JWT_SECRET_FILE=/var/volatile/jwt.hex
 

@@ -70,20 +70,7 @@ make dev-db-setup
 cd ..
 ```
 
-#### 4. Build Lighthouse
-
-```bash
-# Build or obtain Lighthouse v7.0.0-beta.0
-# This step is critical as we need to use the exact version 
-# that is compatible with the playground environment
-
-# Place the built binary in the main directory as lighthouse-bin
-# Then Run this command:
-patchelf --set-interpreter /lib/ld-linux-x86-64.so.2 ./lighthouse-bin
-# The patched binary will be copied to the VM during post-provisioning
-```
-
-#### 5. Run the VM
+#### 4. Run the VM
 
 ```bash
 # This single command will extract the initramfs, inject custom scripts,
@@ -97,7 +84,7 @@ make run-gz
 
 The VM will pause during boot for debugging. You should see output indicating SSH access is available at `ssh -p 10022 root@localhost`.
 
-#### 6. Perform Post-Provisioning
+#### 5. Perform Post-Provisioning
 
 In a new terminal, run:
 
@@ -107,13 +94,11 @@ make post-provision
 ```
 
 This command:
-- Copies beacon node network data
 - Copies genesis.json and testnet configuration
-- Sets up the Lighthouse binary
 - Configures proper permissions
 - Continues the VM boot process
 
-#### 7. Verify the Setup
+#### 6. Verify the Setup
 
 After post-provisioning, the VM will continue booting and start the Ethereum clients. Connect to the VM to check the status:
 
@@ -135,10 +120,9 @@ The following diagram shows the relationship between components:
 
 1. Start builder-playground services on the host
 2. Setup the builder-hub database
-3. Build Lighthouse v7.0.0-beta.0
-4. Run the VM with `make run-gz`
-5. Execute post-provisioning with `make post-provision`
-6. Connect to the VM and verify Ethereum clients are running
-7. Submit builder payload via the builder-hub API on port 8888
+3. Run the VM with `make run-gz`
+4. Execute post-provisioning with `make post-provision`
+5. Connect to the VM and verify Ethereum clients are running
+6. Submit builder payload via the builder-hub API on port 8888
 
 The environment is now ready for testing MEV block building and related functionality!
